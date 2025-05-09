@@ -42,10 +42,7 @@ class DualFrankaEnv(gym.Env):
 
         # Action/Observation Space
         action_dim = len(self.env_left.action_space.low) + len(self.env_right.action_space.low)
-        self.action_space = gym.spaces.Box(
-            np.ones((action_dim,), dtype=np.float32) * -1,
-            np.ones((action_dim,), dtype=np.float32),
-        )
+        self.action_space = gym.spaces.Box(np.ones((action_dim,), dtype=np.float32) * -1, np.ones((action_dim,), dtype=np.float32))
         image_dict = ({f"left/{key}": self.env_left.observation_space["images"][key] for key in self.env_left.observation_space["images"].keys()} | 
                         {f"right/{key}": self.env_right.observation_space["images"][key] for key in self.env_right.observation_space["images"].keys()})
 
@@ -116,8 +113,5 @@ class DualFrankaEnv(gym.Env):
         right_images = {f"right/{key}": ob_right["images"][key] for key in ob_right["images"].keys()}
         left_state = {f"left/{key}": ob_left["state"][key] for key in ob_left["state"].keys()}
         right_state = {f"right/{key}": ob_right["state"][key] for key in ob_right["state"].keys()}
-        ob = {
-                "state": left_state | right_state,
-                "images": left_images | right_images
-            }
+        ob = {"state": left_state | right_state, "images": left_images | right_images}
         return ob

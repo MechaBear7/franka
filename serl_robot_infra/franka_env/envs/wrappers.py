@@ -10,7 +10,9 @@ from scipy.spatial.transform import Rotation as R
 from franka_env.envs.franka_env import FrankaEnv
 from typing import List
 
+
 sigmoid = lambda x: 1 / (1 + np.exp(-x))
+
 
 class HumanClassifierWrapper(gym.Wrapper):
     def __init__(self, env):
@@ -32,7 +34,8 @@ class HumanClassifierWrapper(gym.Wrapper):
     def reset(self, **kwargs):
         obs, info = self.env.reset(**kwargs)
         return obs, info
-    
+
+
 class FWBWFrontCameraBinaryRewardClassifierWrapper(gym.Wrapper):
     """
     This wrapper uses the front camera images to compute the reward,
@@ -142,6 +145,7 @@ class MultiStageBinaryRewardClassifierWrapper(gym.Wrapper):
         self.received = [False] * len(self.reward_classifier_func)
         info['succeed'] = False
         return obs, info
+
 
 class FrontCameraBinaryRewardClassifierWrapperNew(gym.Wrapper):
     """
@@ -267,23 +271,18 @@ class ZOnlyNoFTWrapper(gym.ObservationWrapper):
 
 class Quat2EulerWrapper(gym.ObservationWrapper):
     """
-    Convert the quaternion representation of the tcp pose to euler angles
+    将 TCP 位姿从四元数转换为欧拉角的 wrapper
     """
-
     def __init__(self, env: Env):
         super().__init__(env)
         assert env.observation_space["state"]["tcp_pose"].shape == (7,)
         # from xyz + quat to xyz + euler
-        self.observation_space["state"]["tcp_pose"] = spaces.Box(
-            -np.inf, np.inf, shape=(6,)
-        )
+        self.observation_space["state"]["tcp_pose"] = spaces.Box(-np.inf, np.inf, shape=(6,))
 
     def observation(self, observation):
-        # convert tcp pose from quat to euler
+        # 将 TCP 位姿从四元数转换为欧拉角
         tcp_pose = observation["state"]["tcp_pose"]
-        observation["state"]["tcp_pose"] = np.concatenate(
-            (tcp_pose[:3], R.from_quat(tcp_pose[3:]).as_euler("xyz"))
-        )
+        observation["state"]["tcp_pose"] = np.concatenate((tcp_pose[:3], R.from_quat(tcp_pose[3:]).as_euler("xyz")))
         return observation
 
 
@@ -342,6 +341,7 @@ class DualQuat2EulerWrapper(gym.ObservationWrapper):
         obs, info = self.env.reset(**kwargs)
         return self.observation(obs), info
 
+
 class GripperCloseEnv(gym.ActionWrapper):
     """
     Use this wrapper to task that requires the gripper to be closed
@@ -382,25 +382,19 @@ class SpacemouseIntervention(gym.ActionWrapper):
         self.action_indices = action_indices
 
     def action(self, action: np.ndarray) -> np.ndarray:
-        """
-        Input:
-        - action: policy action
-        Output:
-        - action: spacemouse action if nonezero; else, policy action
-        """
-        expert_a, buttons = self.expert.get_action()
+        expert_a, buttons = self.expert.get_action()  # 获取专家动作和按钮状态
         # self.left, self.right = tuple(buttons)
         self.left, self.right = buttons[0], buttons[-1]
         intervened = False
         
         if np.linalg.norm(expert_a) > 0.001:
-            intervened = True
+            intervened = True  # 如果专家动作的范数大于0.001，则认为干预了
 
         if self.gripper_enabled:
-            if self.left:  # close gripper
+            if self.left:  # 关闭夹爪
                 gripper_action = np.random.uniform(-1, -0.9, size=(1,))
                 intervened = True
-            elif self.right:  # open gripper
+            elif self.right:  # 开启夹爪
                 gripper_action = np.random.uniform(0.9, 1, size=(1,))
                 intervened = True
             else:
@@ -413,21 +407,25 @@ class SpacemouseIntervention(gym.ActionWrapper):
             filtered_expert_a[self.action_indices] = expert_a[self.action_indices]
             expert_a = filtered_expert_a
 
-        if intervened:
+        if intervened:  # 如果干预了，返回专家动作
             return expert_a, True
 
         return action, False
 
     def step(self, action):
-
         new_action, replaced = self.action(action)
 
         obs, rew, done, truncated, info = self.env.step(new_action)
+
         if replaced:
+            # 如果干预了，将干预动作记录到 info 中
             info["intervene_action"] = new_action
+
         info["left"] = self.left
         info["right"] = self.right
+
         return obs, rew, done, truncated, info
+
 
 class DualSpacemouseIntervention(gym.ActionWrapper):
     def __init__(self, env, action_indices=None, gripper_enabled=True):
@@ -532,6 +530,7 @@ class GripperPenaltyWrapper(gym.RewardWrapper):
         self.last_gripper_pos = observation["state"][0, 0]
         return observation, reward, terminated, truncated, info
 
+
 class DualGripperPenaltyWrapper(gym.RewardWrapper):
     def __init__(self, env, penalty=0.1):
         super().__init__(env)
@@ -581,7 +580,8 @@ class WaitWrapper(gym.Wrapper):
         if rew:
             self.wait = True
         return obs, rew, done, truncated, info
-    
+
+
 class USBResetWrapper(gym.Wrapper, FrankaEnv):
     def __init__(self, env):
         super().__init__(env)

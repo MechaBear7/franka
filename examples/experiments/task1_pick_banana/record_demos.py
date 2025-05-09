@@ -7,7 +7,7 @@ import datetime
 from absl import app, flags
 import time
 
-from experiments.mappings import CONFIG_MAPPING
+from experiments.mappings import TRAIN_CONFIG_MAPPING
 from data_util import add_mc_returns_to_trajectory
 
 FLAGS = flags.FLAGS
@@ -20,8 +20,8 @@ flags.DEFINE_float("reward_bias", 0.0, "reward_bias")
 
 
 def main(_):
-    assert FLAGS.exp_name in CONFIG_MAPPING, 'Experiment folder not found.'
-    config = CONFIG_MAPPING[FLAGS.exp_name]()
+    assert FLAGS.exp_name in TRAIN_CONFIG_MAPPING, 'Experiment folder not found.'
+    config = TRAIN_CONFIG_MAPPING[FLAGS.exp_name]()
     env = config.get_environment(fake_env=False, save_video=False, classifier=True)
     FLAGS.reward_neg = config.reward_neg
     

@@ -11,11 +11,10 @@ from franka_env.utils.transformations import (
 
 class RelativeFrame(gym.Wrapper):
     """
-    This wrapper transforms the observation and action to be expressed in the end-effector frame.
-    Optionally, it can transform the tcp_pose into a relative frame defined as the reset pose.
+    该 wrapper 将观测值和动作转换为末端执行器坐标系下的观测值和动作。
+    可选地，它可以将 tcp_pose 转换为相对于重置位置的相对坐标系。
 
-    This wrapper is expected to be used on top of the base Franka environment, which has the following
-    observation space:
+    该 wrapper 预期用于在基础 Franka 环境之上，该环境具有以下观测空间：
     {
         "state": spaces.Dict(
             {
@@ -26,53 +25,18 @@ class RelativeFrame(gym.Wrapper):
         ......
     }, and at least 6 DoF action space with (x, y, z, rx, ry, rz, ...)
     """
-
     def __init__(self, env: Env, include_relative_pose=True):
         super().__init__(env)
         self.adjoint_matrix = np.zeros((6, 6))
 
         self.include_relative_pose = include_relative_pose
         if self.include_relative_pose:
-            # Homogeneous transformation matrix from reset pose's relative frame to base frame
+            # 从重置位置的相对坐标系到基坐标的变换矩阵
             self.T_r_o_inv = np.zeros((4, 4))
-
-    def step(self, action: np.ndarray):
-        # action is assumed to be (x, y, z, rx, ry, rz, gripper)
-        # Transform action from end-effector frame to base frame
-        transformed_action = self.transform_action(action)
-        obs, reward, done, truncated, info = self.env.step(transformed_action)
-        info['original_state_obs'] = copy.deepcopy(obs['state'])
-
-        # this is to convert the spacemouse intervention action
-        if "intervene_action" in info:
-            info["intervene_action"] = self.transform_action_inv(info["intervene_action"])
-
-        # Update adjoint matrix
-        self.adjoint_matrix = construct_adjoint_matrix(obs["state"]["tcp_pose"])
-
-        # Transform observation to spatial frame
-        transformed_obs = self.transform_observation(obs)
-        return transformed_obs, reward, done, truncated, info
-
-    def reset(self, **kwargs):
-        obs, info = self.env.reset(**kwargs)
-        info['original_state_obs'] = copy.deepcopy(obs['state'])
-
-        # Update adjoint matrix
-        self.adjoint_matrix = construct_adjoint_matrix(obs["state"]["tcp_pose"])
-        if self.include_relative_pose:
-            # Update transformation matrix from the reset pose's relative frame to base frame
-            self.T_r_o_inv = np.linalg.inv(
-                construct_homogeneous_matrix(obs["state"]["tcp_pose"])
-            )
-
-        # Transform observation to spatial frame
-        return self.transform_observation(obs), info
 
     def transform_observation(self, obs):
         """
-        Transform observations from spatial(base) frame into body(end-effector) frame
-        using the adjoint matrix
+        将观测值从基坐标系转换为末端执行器坐标系。
         """
         adjoint_inv = np.linalg.inv(self.adjoint_matrix)
         obs["state"]["tcp_vel"] = adjoint_inv @ obs["state"]["tcp_vel"]
@@ -81,7 +45,7 @@ class RelativeFrame(gym.Wrapper):
             T_b_o = construct_homogeneous_matrix(obs["state"]["tcp_pose"])
             T_b_r = self.T_r_o_inv @ T_b_o
 
-            # Reconstruct transformed tcp_pose vector
+            # 重构变换后的 tcp_pose 向量
             p_b_r = T_b_r[:3, 3]
             theta_b_r = R.from_matrix(T_b_r[:3, :3]).as_quat()
             obs["state"]["tcp_pose"] = np.concatenate((p_b_r, theta_b_r))
@@ -90,8 +54,7 @@ class RelativeFrame(gym.Wrapper):
 
     def transform_action(self, action: np.ndarray):
         """
-        Transform action from body(end-effector) frame into into spatial(base) frame
-        using the adjoint matrix. 
+        将动作从末端执行器坐标系转换为基坐标系。
         """
         action = np.array(action)  # in case action is a jax read-only array
         action[:6] = self.adjoint_matrix @ action[:6]
@@ -99,12 +62,42 @@ class RelativeFrame(gym.Wrapper):
 
     def transform_action_inv(self, action: np.ndarray):
         """
-        Transform action from spatial(base) frame into body(end-effector) frame
-        using the adjoint matrix.
+        将动作从基坐标系转换为末端执行器坐标系。
         """
         action = np.array(action)
         action[:6] = np.linalg.inv(self.adjoint_matrix) @ action[:6]
         return action
+
+    def step(self, action: np.ndarray):
+        # action 被假设为 (x, y, z, rx, ry, rz, gripper)
+        # 将动作从末端执行器坐标系转换为基坐标系
+        transformed_action = self.transform_action(action)
+        obs, reward, done, truncated, info = self.env.step(transformed_action)
+        info['original_state_obs'] = copy.deepcopy(obs['state'])
+
+        # 将 SpaceMouse 干预动作转换为基坐标系
+        if "intervene_action" in info:
+            info["intervene_action"] = self.transform_action_inv(info["intervene_action"])
+
+        # 更新伴随矩阵
+        self.adjoint_matrix = construct_adjoint_matrix(obs["state"]["tcp_pose"])
+
+        # 将观测值转换为基坐标系
+        transformed_obs = self.transform_observation(obs)
+        return transformed_obs, reward, done, truncated, info
+
+    def reset(self, **kwargs):
+        obs, info = self.env.reset(**kwargs)
+        info['original_state_obs'] = copy.deepcopy(obs['state'])
+
+        # 更新伴随矩阵
+        self.adjoint_matrix = construct_adjoint_matrix(obs["state"]["tcp_pose"])
+        if self.include_relative_pose:
+            # 更新从重置位置的相对坐标系到基坐标的变换矩阵
+            self.T_r_o_inv = np.linalg.inv(construct_homogeneous_matrix(obs["state"]["tcp_pose"]))
+
+        # 将观测值转换为基坐标系
+        return self.transform_observation(obs), info
 
 
 class DualRelativeFrame(gym.Wrapper):

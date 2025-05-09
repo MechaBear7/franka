@@ -16,19 +16,13 @@ from serl_franka_controllers.msg import ZeroJacobian
 import geometry_msgs.msg as geom_msg
 from dynamic_reconfigure.client import Client as ReconfClient
 
+
 FLAGS = flags.FLAGS
 flags.DEFINE_string("robot_ip", "172.16.0.2", "IP address of the franka robot's controller box")
 flags.DEFINE_string("gripper_ip", "192.168.1.114", "IP address of the robotiq gripper if being used")
 flags.DEFINE_string("gripper_type", "Robotiq", "Type of gripper to use: Robotiq, Franka, or None")
-flags.DEFINE_list(
-    "reset_joint_target",
-    [0, 0, 0, -1.9, -0, 2, 0],
-    "Target joint angles for the robot to reset to",
-)
-flags.DEFINE_string("flask_url", 
-    "127.0.0.1",
-    "URL for the flask server to run on."
-)
+flags.DEFINE_list("reset_joint_target", [0, 0, 0, -1.9, -0, 2, 0], "Target joint angles for the robot to reset to")
+flags.DEFINE_string("flask_url",  "127.0.0.1", "URL for the flask server to run on.")
 flags.DEFINE_string("ros_port", "11311", "Port for the ROS master to run on.")
 
 
@@ -42,19 +36,9 @@ class FrankaServer:
         self.reset_joint_target = reset_joint_target
         self.gripper_type = gripper_type
 
-        self.eepub = rospy.Publisher(
-            "/cartesian_impedance_controller/equilibrium_pose",
-            geom_msg.PoseStamped,
-            queue_size=10,
-        )
-        self.resetpub = rospy.Publisher(
-            "/franka_control/error_recovery/goal", ErrorRecoveryActionGoal, queue_size=1
-        )
-        self.jacobian_sub = rospy.Subscriber(
-            "/cartesian_impedance_controller/franka_jacobian",
-            ZeroJacobian,
-            self._set_jacobian,
-        )
+        self.eepub = rospy.Publisher("/cartesian_impedance_controller/equilibrium_pose", geom_msg.PoseStamped, queue_size=10)
+        self.resetpub = rospy.Publisher("/franka_control/error_recovery/goal", ErrorRecoveryActionGoal, queue_size=1)
+        self.jacobian_sub = rospy.Subscriber("/cartesian_impedance_controller/franka_jacobian", ZeroJacobian, self._set_jacobian)
         time.sleep(1)
         self.state_sub = rospy.Subscriber("franka_state_controller/franka_states", FrankaState, self._set_currpos)
 
@@ -115,12 +99,7 @@ class FrankaServer:
         # Wait until target joint angles are reached
         count = 0
         time.sleep(1)
-        while not np.allclose(
-            np.array(self.reset_joint_target) - np.array(self.q),
-            0,
-            atol=1e-2,
-            rtol=1e-2,
-        ):
+        while not np.allclose(np.array(self.reset_joint_target) - np.array(self.q), 0, atol=1e-2, rtol=1e-2):
             time.sleep(1)
             count += 1
             if count > 30:
@@ -212,9 +191,7 @@ def main(_):
     )
     robot_server.start_impedance()
 
-    reconf_client = ReconfClient(
-        "cartesian_impedance_controllerdynamic_reconfigure_compliance_param_node"
-    )
+    reconf_client = ReconfClient("cartesian_impedance_controllerdynamic_reconfigure_compliance_param_node")
 
     rospy.wait_for_service('/franka_control/set_load')
     set_load_service = rospy.ServiceProxy('/franka_control/set_load', SetLoad)

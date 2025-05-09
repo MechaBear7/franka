@@ -16,47 +16,37 @@ from serl_launcher.wrappers.chunking import ChunkingWrapper
 from serl_launcher.networks.reward_classifier import load_classifier_func
 
 from examples.experiments.config import DefaultTrainingConfig
-from examples.experiments.task1_pick_banana.wrapper import PickBananaEnv, GripperPenaltyWrapper
+from examples.experiments.task2_pick_cup.wrapper import PickCupEnv, GripperPenaltyWrapper
 
 
 class EnvConfig(DefaultEnvConfig):
     SERVER_URL: str = "http://127.0.0.2:5000/"
     REALSENSE_CAMERAS = {
-        "wrist_1": {  # 腕部相机
-            "serial_number": "115222071051",
-            "dim": (1280, 720),
-            "exposure": 10500,
-        },
-        "side_policy_256": {  # 侧面相机
-            "serial_number": "242422305075",
-            "dim": (1280, 720),
-            "exposure": 13000,
-        },
-        "side_classifier": {  # 侧面用作成败判定的相机？
-            "serial_number": "242422305075", 
-            "dim": (1280, 720),
-            "exposure": 13000,
-        },
-        "demo": {  # Demo 录制相机？
-            "serial_number": "242422305075", 
-            "dim": (1280, 720),
-            "exposure": 13000,
-        },
+        # * 腕部相机
+        "wrist_1": {"serial_number": "115222071051", "dim": (1280, 720), "exposure": 10500},
+        # * 侧面相机
+        "side_policy_256": {"serial_number": "242422305075", "dim": (1280, 720), "exposure": 13000},
+        # * 判定相机，Clone from side_policy_256
+        "side_classifier": None,
+        # * Demo 录制相机，Clone from side_policy_256
+        "demo": None,
     }
-    IMAGE_CROP = {"wrist_1": lambda img: img,
-                  "side_policy_256": lambda img: img[250:-150, 400:-500],  # 高度保留第250像素到-150像素，宽度保留第400像素到-500像素的图像
-                  "side_classifier": lambda img: img[390:-150, 420:-700],  # 高度保留第390像素到-150像素，宽度保留第420像素到-700像素的图像
-                  "demo": lambda img: img[50:-150, 400:-400]}  # 高度保留第50像素到-150像素，宽度保留第400像素到-400像素的图像
+    IMAGE_CROP = {
+        "wrist_1": lambda img: img,
+        "side_policy_256": lambda img: img[250:-150, 400:-500],  # 高度保留第250像素到-150像素，宽度保留第400像素到-500像素的图像
+        "side_classifier": lambda img: img[390:-150, 420:-700],  # 高度保留第390像素到-150像素，宽度保留第420像素到-700像素的图像
+        "demo": lambda img: img[50:-150, 400:-400]  # 高度保留第50像素到-150像素，宽度保留第400像素到-400像素的图像
+    }
 
-    TARGET_POSE = np.array([0.33, -0.15, 0.20, np.pi, 0, 0])  # 目标位姿
-    RESET_POSE = np.array([0.61, -0.17, 0.22, np.pi, 0, 0])
-    ACTION_SCALE = np.array([0.08, 0.2, 1])
-    RANDOM_RESET = True
-    DISPLAY_IMAGE = True
-    RANDOM_XY_RANGE = 0.02
-    RANDOM_RZ_RANGE = 0.03
-    ABS_POSE_LIMIT_HIGH = TARGET_POSE + np.array([0.3, 0.03, 0.02, 0.01, 0.01, 0.3])
-    ABS_POSE_LIMIT_LOW = TARGET_POSE - np.array([0.03, 0.05, 0.05, 0.01, 0.01, 0.3])
+    TARGET_POSE = np.array([0.33, -0.15, 0.20, np.pi, 0, 0])  # TCP 完成任务的位姿
+    RESET_POSE = np.array([0.61, -0.17, 0.22, np.pi, 0, 0])  # TCP 复位位姿
+    ACTION_SCALE = np.array([0.08, 0.2, 1])  # 动作缩放
+    RANDOM_RESET = True  # 是否随机复位
+    DISPLAY_IMAGE = True  # 是否显示图像
+    RANDOM_XY_RANGE = 0.02  # 随机 XY 范围
+    RANDOM_RZ_RANGE = 0.03  # 随机 RZ 范围
+    ABS_POSE_LIMIT_HIGH = TARGET_POSE + np.array([0.3, 0.03, 0.02, 0.01, 0.01, 0.3])  # TCP 位移限制
+    ABS_POSE_LIMIT_LOW = TARGET_POSE - np.array([0.03, 0.05, 0.05, 0.01, 0.01, 0.3])  # TCP 位移限制
     COMPLIANCE_PARAM = {
         "translational_stiffness": 2000,
         "translational_damping": 89,
@@ -76,7 +66,7 @@ class EnvConfig(DefaultEnvConfig):
         "rotational_clip_neg_y": 0.02,
         "rotational_clip_neg_z": 0.02, 
         "rotational_Ki": 0,
-    }  # for normal operation other than reset procedure
+    }  # 正常操作时的参数
     PRECISION_PARAM = {
         "translational_stiffness": 2000,
         "translational_damping": 89,
@@ -96,7 +86,7 @@ class EnvConfig(DefaultEnvConfig):
         "rotational_clip_neg_y": 0.03,
         "rotational_clip_neg_z": 0.03,
         "rotational_Ki": 0.0,
-    }  # only for reset procedure
+    }  # 仅用于复位时的参数
     MAX_EPISODE_LENGTH = 100  # 最大步数
  
 
@@ -115,13 +105,19 @@ class TrainConfig(DefaultTrainingConfig):
     task_desc = "Put the yellow banana to the green plate"
     octo_path = "/root/online_rl/octo_model/octo-small"
 
-    def get_environment(self, fake_env=False, save_video=False, classifier=False, stack_obs_num=1):
-        env = PickBananaEnv(fake_env=fake_env, save_video=save_video, config=EnvConfig())
+    def get_environment(
+        self,
+        fake_env=False,  # 是否使用假环境
+        save_video=False,  # 是否保存视频
+        classifier=False,  # 是否使用分类器
+        stack_obs_num=1,  # 堆叠观测值的步数
+    ):
+        env = PickCupEnv(fake_env=fake_env, save_video=save_video, config=EnvConfig())
         if not fake_env:
             env = SpacemouseIntervention(env)  # spacemouse 干预 wrapper
         env = RelativeFrame(env)  # 坐标系转换 wrapper
         env = Quat2EulerWrapper(env)  # 将四元数转换为欧拉角 wrapper
-        env = SERLObsWrapper(env, proprio_keys=self.proprio_keys)  # 
+        env = SERLObsWrapper(env, proprio_keys=self.proprio_keys)  # 观测值展平 wrapper
         env = ChunkingWrapper(env, obs_horizon=stack_obs_num, act_exec_horizon=None)  # 堆叠观测值，多步执行动作的 wrapper
         
         if classifier:
@@ -134,8 +130,10 @@ class TrainConfig(DefaultTrainingConfig):
             )
 
             def reward_func(obs):
-                def sigmoid(x): return 1 / (1 + jnp.exp(-x))
-                # Should open the gripper and pull up after putting the banana
+                def sigmoid(x):
+                    return 1 / (1 + jnp.exp(-x))
+                # * 我们期望在放置完毕后，夹爪抬升到一定高度，并且夹爪打开
+                # 如果分类器预测成功，并且夹爪打开，并且TCP高度大于0.16，则奖励10.0
                 if sigmoid(classifier(obs)[0]) > 0.9 and env.curr_gripper_pos > 0.5 and env.currpos[2] > 0.16:
                     return 10.0
                 else:
@@ -143,6 +141,6 @@ class TrainConfig(DefaultTrainingConfig):
 
             env = MultiCameraBinaryRewardClassifierWrapper(env, reward_func)
         
-        env = GripperPenaltyWrapper(env, penalty=-0.2)
+        env = GripperPenaltyWrapper(env, penalty=-0.2)  # 如果夹爪动作过大，则进行惩罚
 
         return env

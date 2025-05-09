@@ -83,19 +83,13 @@ def create_classifier(
     with open(pretrained_encoder_path, "rb") as f:
         encoder_params = pkl.load(f)
     param_count = sum(x.size for x in jax.tree_leaves(encoder_params))
-    print(
-        f"Loaded {param_count/1e6}M parameters from ResNet-10 pretrained on ImageNet-1K"
-    )
+    print(f"Loaded {param_count/1e6}M parameters from ResNet-10 pretrained on ImageNet-1K")
     new_params = classifier.params
     for image_key in image_keys:
         if "pretrained_encoder" in new_params["encoder_def"][f"encoder_{image_key}"]:
-            for k in new_params["encoder_def"][f"encoder_{image_key}"][
-                "pretrained_encoder"
-            ]:
+            for k in new_params["encoder_def"][f"encoder_{image_key}"]["pretrained_encoder"]:
                 if k in encoder_params:
-                    new_params["encoder_def"][f"encoder_{image_key}"][
-                        "pretrained_encoder"
-                    ][k] = encoder_params[k]
+                    new_params["encoder_def"][f"encoder_{image_key}"]["pretrained_encoder"][k] = encoder_params[k]
                     print(f"replaced {k} in encoder_{image_key}")
 
     classifier = classifier.replace(params=new_params)
@@ -114,12 +108,7 @@ def load_classifier_func(
             and returns the logits of the classifier.
     """
     classifier = create_classifier(key, sample, image_keys, n_way=n_way)
-    classifier = checkpoints.restore_checkpoint(
-        checkpoint_path,
-        target=classifier,
-    )
-    func = lambda obs: classifier.apply_fn(
-        {"params": classifier.params}, obs, train=False
-    )
+    classifier = checkpoints.restore_checkpoint(checkpoint_path, target=classifier)
+    func = lambda obs: classifier.apply_fn({"params": classifier.params}, obs, train=False)
     func = jax.jit(func)
     return func

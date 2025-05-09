@@ -27,13 +27,12 @@ def batched_random_crop(img, rng, *, padding, num_batch_dims: int = 1):
 
     rngs = jax.random.split(rng, img.shape[0])
 
-    img = jax.vmap(
-        lambda i, r: random_crop(i, r, padding=padding), in_axes=(0, 0), out_axes=0
-    )(img, rngs)
+    img = jax.vmap(lambda i, r: random_crop(i, r, padding=padding), in_axes=(0, 0), out_axes=0)(img, rngs)
 
     # Restore batch dims
     img = jnp.reshape(img, original_shape)
     return img
+
 
 def resize(image, image_dim):
     assert len(image_dim) == 2

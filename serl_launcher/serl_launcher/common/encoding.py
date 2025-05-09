@@ -8,6 +8,7 @@ from einops import rearrange, repeat
 from octo.model.octo_module import OctoTransformer
 from octo.utils.typing import Config, Data, Params, PRNGKey, Sequence
 
+
 class EncodingWrapper(nn.Module):
     """
     Encodes observations into a single flat encoding, adding additional
